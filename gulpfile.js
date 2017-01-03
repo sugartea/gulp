@@ -1,10 +1,5 @@
-//自动编译less
-//自动增加前缀
-//自动刷新浏览器
-
-//模块相关
 var gulp = require('gulp'),
-    less = require('gulp-less'),
+    sass = require('gulp-sass'),
  	notify = require('gulp-notify'),
     plumber = require('gulp-plumber'),
     autoprefixer = require('gulp-autoprefixer'),
@@ -12,8 +7,10 @@ var gulp = require('gulp'),
     reload = browserSync.reload,
     fs = require('fs'),
     parseArgs  = require('minimist'),
-    changed = require('gulp-changed');
-
+    changed = require('gulp-changed'),
+    minifycss = require('gulp-clean-css'),
+    uglify = require('gulp-uglify');
+    //less = require('gulp-less')
 //命令与路径相关
 var argv = parseArgs(process.argv.slice(2),{
     string: ['n'],
@@ -21,15 +18,16 @@ var argv = parseArgs(process.argv.slice(2),{
         'n': 'nofound'
     }
 });
-var pth = 'src/' + (argv.n == 'nofound' ? '**' : argv.n);
+var pth = 'src/' + (argv.n == 'nofound' ? '**' : argv.n);//src文件路径
+var dpath = 'dist/' + (argv.n == 'nofound' ? '**' : argv.n);//dist文件路径
 
 //css相关 
-gulp.task('build:less', function () {
-    gulp.src(pth+'/less/*.less')
+gulp.task('build:sass', function () {
+    gulp.src(pth+'/sass/*.scss')
         .pipe(plumber({errorHandler: notify.onError('Error: <%= error.message %>')}))
-        .pipe(changed(pth+'/css', {extension: '.less'}))
-        .pipe(less())
-        .pipe(gulp.dest(pth+'/css'))
+        .pipe(sass())
+        .pipe(minifycss())
+        .pipe(gulp.dest(dpath+'/css'))
         .pipe(reload({stream: true}));
 });
  
@@ -46,30 +44,37 @@ gulp.task('autofx', function () {
         .pipe(gulp.dest(pth+'/css'));
 });
 
-
-// 静态服务器 + 监听 less/html 文件
-gulp.task('serve', ['build:less','autofx'], function() {
-    var pth = 'src/' + (argv.n == 'nofound' ? '**' : argv.n);  
+// 静态服务器&监听变化
+gulp.task('serve', ['build:sass','autofx'], function() {
     browserSync.init({
-        server: './'+pth
+        server: './'+dpath,
+/*        port: 80*/
     });
     open: false;
-    gulp.watch(pth+"/less/*.less", ['build:less']);//不可在边转换less的时候边给css加前缀
+    //gulp.watch(pth+"/less/*.less", ['build:less']);//不可在边转换less的时候边给css加前缀
+    gulp.watch(pth+"/sass/*.scss",['build:sass']);
     gulp.watch(pth+"/css/*.css", ['autofx']);
-    gulp.watch(pth+"/js/*.js").on('change', reload);
-    gulp.watch(pth+"/*.html").on('change', reload);
+    gulp.watch(pth+"/js/*.js", ['copy-js']);
+    gulp.watch(pth+"/*.html",['copy-html']);
+    gulp.watch(pth+"/img/*.*",['copy-img']);
 });
 
-gulp.task('default', ['serve','prepare','copy']);
+gulp.task('default', ['prepare','copy','serve',]);//创建文件夹，复制文件，启动服务器
 
-//创建各个文件夹
+//创建src各个文件夹
 function ensureDir(pth){
     fs.mkdirSync(pth);
-    fs.mkdirSync(pth+'/css');
-    fs.mkdirSync(pth+'/less');
+    fs.mkdirSync(pth+'/sass');
     fs.mkdirSync(pth+'/js');
     fs.mkdirSync(pth+'/img');
     createIndexHtml(pth);
+}
+//创建dist各个文件夹
+function ensureDirDist(pth){
+    fs.mkdirSync(pth);
+    fs.mkdirSync(pth+'/css');
+    fs.mkdirSync(pth+'/js');
+    fs.mkdirSync(pth+'/img');
 }
 
 //创建index.html的模板
@@ -79,14 +84,7 @@ function createIndexHtml(pth){
 <html lang="en">
 <head>
     <meta charset="UTF-8"/>
-    <meta http-equiv="Cache-Control" content="no-transform"/>
-    <meta http-equiv="Cache-Control" content="no-siteapp"/>
-    <meta name="format-detection" content="telephone=no"/>
-    <meta name="apple-mobile-web-app-capable" content="yes"/>
-    <meta content="yes" name="apple-touch-fullscreen"/>
-    <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
     <title></title>
-    <script>!function(n){var e=n.document,t=e.documentElement,dpr,scale;var isAndroid=n.navigator.appVersion.match(/android/gi),isIPhone=n.navigator.appVersion.match(/iphone/gi),devicePixelRatio=n.devicePixelRatio;if(isIPhone){if(devicePixelRatio>=2&&(!dpr||dpr>=2)){dpr=2}else{dpr=1}}else{dpr=1}scale=1/dpr;var metaEl=e.createElement("meta");var scale=dpr===1?1:0.5;metaEl.setAttribute("name","viewport");metaEl.setAttribute("content","initial-scale="+scale+", maximum-scale="+scale+", minimum-scale="+scale+", user-scalable=no");if(t.firstElementChild){t.firstElementChild.appendChild(metaEl)}else{var wrap=e.createElement("div");wrap.appendChild(metaEl);e.write(wrap.innerHTML)}var i=1440,d=i/200,rem,o="orientationchange" in n?"orientationchange":"resize",a=function(){var n=t.clientWidth||320;n>i&&(n=i),t.style.fontSize=(rem=n/d)+"px"};n.px2rem=function(px){var v=parseFloat(px);return v/rem};n.rem2px=function(r){var v=parseFloat(r);return rem*v};e.addEventListener&&(n.addEventListener(o,a,!1),e.addEventListener("DOMContentLoaded",a,!1))}(window);</script>
 </head>
 <body>
     hello world! 
@@ -98,22 +96,31 @@ function createIndexHtml(pth){
 //若文件不存在，则创建文件，否则打开已有文件
 gulp.task('prepare', function(cb){
     try{
-        fs.statSync(pth)
+        fs.statSync(dpath);
     }catch(e){
         ensureDir(pth);
+        ensureDirDist(dpath);
     }
     return cb();
 });
 
-//复制初始化文件
-gulp.task('copy-less', function(){
-    gulp.src('./common/common.less')
-        .pipe(gulp.dest(pth+'/less'));     
-});
+//初始化时复制文件
+gulp.task('copy', ['copy-html','copy-js','copy-img']);
 
-gulp.task('copy-jquery', function(){
-    gulp.src('./common/jquery.min.js')
-        .pipe(gulp.dest(pth+'/js'));      
-});
+gulp.task('copy-js',function(){
+    gulp.src(pth + '/js/*.js')
+    .pipe(uglify())
+    .pipe(gulp.dest(dpath + "/js/"))
+    .pipe(reload({stream: true}));
+})
 
-gulp.task('copy', ['copy-less','copy-jquery']);
+gulp.task('copy-html',function(){
+    gulp.src(pth + "/*.html")
+    .pipe(gulp.dest(dpath+'/'))
+    .pipe(reload({stream: true}));
+})
+
+gulp.task('copy-img',function(){
+    gulp.src(pth + "/img/*.*")
+    .pipe(gulp.dest(dpath + "/img/"));
+})
