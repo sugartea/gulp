@@ -49,8 +49,9 @@ gulp.task('serve', ['build:sass','autofx'], function() {
     browserSync.init({
         server: './'+dpath,
 /*        port: 80*/
+        open: false,
+        notify: false
     });
-    open: false;
     //gulp.watch(pth+"/less/*.less", ['build:less']);//不可在边转换less的时候边给css加前缀
     gulp.watch(pth+"/sass/*.scss",['build:sass']);
     gulp.watch(pth+"/css/*.css", ['autofx']);
