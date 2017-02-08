@@ -110,7 +110,6 @@ gulp.task('copy', ['copy-html','copy-js','copy-img']);
 
 gulp.task('copy-js',function(){
     gulp.src(pth + '/js/*.js')
-    .pipe(uglify())
     .pipe(gulp.dest(dpath + "/js/"))
     .pipe(reload({stream: true}));
 })
